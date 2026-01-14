@@ -1,5 +1,10 @@
 import { createFortSchema, updateFortSchema } from "./fort.validation";
-import { createFort, listForts, updateFort, disableFort } from "./fort.service";
+import {
+  createFort,
+  listForts,
+  updateFort,
+  setFortActive,
+} from "./fort.service";
 
 export async function createFortController(body: any) {
   const data = createFortSchema.parse(body);
@@ -15,6 +20,6 @@ export async function updateFortController(id: string, body: any) {
   return updateFort(id, data);
 }
 
-export async function deleteFortController(id: string) {
-  return disableFort(id);
+export async function setFortActiveController(id: string, is_active: boolean) {
+  return setFortActive(id, is_active);
 }

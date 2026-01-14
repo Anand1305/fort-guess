@@ -5,11 +5,11 @@ import {
   ManyToOne,
   OneToMany,
   CreateDateColumn,
+  JoinColumn,
 } from "typeorm";
 import type { User } from "./users";
 import { Fort } from "./fort";
 import type { Guess } from "./guess";
-
 
 @Entity("game_sessions")
 export class GameSession {
@@ -17,9 +17,11 @@ export class GameSession {
   id!: string;
 
   @ManyToOne(() => require("./users").User, (user: User) => user.sessions)
+  @JoinColumn({ name: "userIdId" }) // ← this must match your DB column
   user!: User;
 
   @ManyToOne(() => Fort, (fort) => fort.sessions)
+  @JoinColumn({ name: "fortIdId" }) // ← same for fort (you have fortIdId)
   fort!: Fort;
 
   @Column({ default: 0 })

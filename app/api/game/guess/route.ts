@@ -7,10 +7,13 @@ import { User } from "@/databse/entities/users";
 
 export async function POST(req: Request) {
   try {
+    console.log("API Hit");
     const session = await getServerSession(authOptions);
+    
     if (!session?.user?.email) {
       return error("Unauthorized", 401);
     }
+
 
     const body = await req.json();
     const { sessionId, guess } = body;

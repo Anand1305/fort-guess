@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 type GameState = {
   sessionId: string;
@@ -20,6 +21,7 @@ export default function PlayPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [gameOver, setGameOver] = useState(false);
+  const [won, setWon] = useState(false);
 
   /* ---------------- START GAME ---------------- */
 
@@ -28,12 +30,10 @@ export default function PlayPage() {
     setLoading(true);
     setMessage(null);
     setGameOver(false);
-    setGame(null); // Reset game state for new game
+    setWon(false);
+    setGame(null);
 
-    const res = await fetch("/api/game/start", {
-      method: "POST",
-    });
-
+    const res = await fetch("/api/game/start", { method: "POST" });
     const data = await res.json();
     setLoading(false);
 
@@ -66,20 +66,20 @@ export default function PlayPage() {
     setLoading(false);
 
     if (!res.ok || !data.success) {
-      setMessage("Invalid guess");
+      setMessage("❌ Invalid guess");
       return;
     }
 
     const result = data.data;
 
     if (result.correct) {
-      setMessage(`🎉 Correct! Your score: ${result.score}`);
+      setWon(true);
       setGameOver(true);
+      setMessage(`You guessed it right! 🎉`);
       return;
     }
 
-    // Update game state with new hints/attempts (if provided in response)
-    if (result.hints !== undefined && result.attempts_left !== undefined) {
+    if (result.hints && result.attempts_left !== undefined) {
       setGame({
         ...game,
         hints: result.hints,
@@ -88,8 +88,8 @@ export default function PlayPage() {
     }
 
     if (result.game_over) {
-      setMessage("❌ Game over. No attempts left.");
       setGameOver(true);
+      setMessage("Better luck next time!");
       return;
     }
 
@@ -102,43 +102,64 @@ export default function PlayPage() {
     <div className="max-w-2xl mx-auto mt-10">
       <Card>
         <CardHeader>
-          <CardTitle>Guess the Fort</CardTitle>
+          <CardTitle className="text-center text-2xl">
+            🏰 Guess the Fort
+          </CardTitle>
         </CardHeader>
 
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
           {!game ? (
-            <Button onClick={startGame} disabled={loading}>
-              {loading ? "Starting..." : "Start Game"}
-            </Button>
+            <div className="text-center">
+              <Button onClick={startGame} disabled={loading}>
+                {loading ? "Starting..." : "Start Game"}
+              </Button>
+            </div>
           ) : (
             <>
+              {/* IMAGE */}
               <img
                 src={game.image_url}
                 alt="Fort"
-                className="rounded-md max-h-64 w-full object-cover"
+                className="rounded-lg max-h-64 w-full object-cover border"
               />
 
-              <p>
-                <strong>Location:</strong> {game.location}
-              </p>
-
-              <p>
-                <strong>Description:</strong> {game.description}
-              </p>
-
-              <div>
-                <strong>Hints:</strong>
-                <ul className="list-disc ml-6 mt-2">
-                  {game.hints.map((hint, i) => (
-                    <li key={i}>{hint}</li>
-                  ))}
-                </ul>
+              {/* META */}
+              <div className="grid gap-2">
+                <p>
+                  <strong>📍 Location:</strong> {game.location}
+                </p>
+                <p>
+                  <strong>📝 Description:</strong> {game.description}
+                </p>
               </div>
 
-              <p>
-                <strong>Attempts left:</strong> {game.attempts_left}
-              </p>
+              {/* ATTEMPTS */}
+              <div className="flex justify-between items-center">
+                <Badge
+                  variant={
+                    game.attempts_left <= 1 ? "destructive" : "secondary"
+                  }
+                >
+                  Attempts left: {game.attempts_left}
+                </Badge>
+              </div>
 
+              {/* HINTS */}
+              <div>
+                <h3 className="font-semibold mb-2">💡 Hints Unlocked</h3>
+                <div className="grid gap-2">
+                  {game.hints.map((hint, i) => (
+                    <div
+                      key={i}
+                      className="p-3 rounded-md bg-muted border text-sm"
+                    >
+                      <strong>Hint {i + 1}:</strong> {hint}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* INPUT / RESULT */}
               {!gameOver ? (
                 <div className="flex gap-2">
                   <Input
@@ -151,14 +172,29 @@ export default function PlayPage() {
                   </Button>
                 </div>
               ) : (
-                <Button onClick={startGame} disabled={loading}>
-                  {loading ? "Starting..." : "Play Again"}
-                </Button>
+                <div
+                  className={`text-center p-4 rounded-lg ${
+                    won
+                      ? "bg-green-100 text-green-800"
+                      : "bg-red-100 text-red-800"
+                  }`}
+                >
+                  <p className="text-lg font-semibold">
+                    {won ? "🎉 You Won!" : "❌ Game Over"}
+                  </p>
+                  <p className="mt-1">{message}</p>
+
+                  <Button
+                    className="mt-4"
+                    onClick={startGame}
+                    disabled={loading}
+                  >
+                    Play Again
+                  </Button>
+                </div>
               )}
             </>
           )}
-
-          {message && <p className="text-center font-medium mt-4">{message}</p>}
         </CardContent>
       </Card>
     </div>

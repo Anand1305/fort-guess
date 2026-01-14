@@ -45,6 +45,15 @@ export async function updateFort(id: string, data: Partial<Fort>) {
   return repo.save(fort);
 }
 
-export async function disableFort(id: string) {
-  return updateFort(id, { is_active: false });
+export async function setFortActive(id: string, is_active: boolean) {
+  const ds = AppDataSource();
+  if (!ds.isInitialized) await ds.initialize();
+
+  const result = await ds.getRepository(Fort).update({ id }, { is_active });
+
+  if (result.affected === 0) {
+    throw new Error("NOT_FOUND");
+  }
+
+  return true;
 }

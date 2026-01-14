@@ -4,21 +4,18 @@ import {
   createFortController,
   listFortsController,
   updateFortController,
-  deleteFortController,
+  setFortActiveController,
 } from "@/modules/forts/fort.controller";
 
 export async function POST(req: Request) {
   try {
     await requireAdmin();
-
     const body = await req.json();
     const fort = await createFortController(body);
     return success(fort, 201);
   } catch (e: any) {
     return error(
-      e.message === "FORT_EXISTS"
-        ? "Fort already exists"
-        : "Unauthorized or invalid data",
+      e.message === "FORT_EXISTS" ? "Fort already exists" : "Invalid data",
       400
     );
   }
@@ -38,22 +35,19 @@ export async function PUT(req: Request) {
   try {
     await requireAdmin();
 
-    const { id, ...body } = await req.json();
+    const { id, is_active, ...body } = await req.json();
+    if (!id) return error("ID required", 400);
+
+    // Toggle active/inactive
+    if (typeof is_active === "boolean") {
+      await setFortActiveController(id, is_active);
+      return success("Fort status updated");
+    }
+
+    // Normal edit
     const fort = await updateFortController(id, body);
     return success(fort);
   } catch {
     return error("Update failed", 400);
-  }
-}
-
-export async function DELETE(req: Request) {
-  try {
-    await requireAdmin();
-
-    const { id } = await req.json();
-    await deleteFortController(id);
-    return success("Fort disabled");
-  } catch {
-    return error("Delete failed", 400);
   }
 }

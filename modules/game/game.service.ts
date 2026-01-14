@@ -48,6 +48,7 @@ export async function submitGuess(
   sessionId: string,
   guessText: string
 ) {
+  console.log("Submit work?");
   const ds = AppDataSource();
   if (!ds.isInitialized) await ds.initialize();
 

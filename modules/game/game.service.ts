@@ -8,17 +8,17 @@ function normalize(text: string) {
   return text.trim().toLowerCase();
 }
 
+const MAX_ATTEMPTS = 3;
+const SCORE_MAP = [100, 70, 50];
+
 export async function startGame(user: User) {
   const ds = AppDataSource();
-  if (!ds.isInitialized) await ds.initialize();
 
   const fortRepo = ds.getRepository(Fort);
   const sessionRepo = ds.getRepository(GameSession);
 
   const forts = await fortRepo.find({ where: { is_active: true } });
-  if (forts.length === 0) {
-    throw new Error("NO_FORTS_AVAILABLE");
-  }
+  if (forts.length === 0) throw new Error("NO_FORTS_AVAILABLE");
 
   const fort = forts[Math.floor(Math.random() * forts.length)];
 
@@ -31,15 +31,13 @@ export async function startGame(user: User) {
 
   await sessionRepo.save(session);
 
-  const MAX_ATTEMPTS = 3;
-
   return {
     sessionId: session.id,
     image_url: fort.image_url,
     location: fort.location,
     description: fort.description,
     hints: fort.hints.slice(0, 1),
-    attempts_left: MAX_ATTEMPTS - session.attempts_used,
+    attempts_left: MAX_ATTEMPTS,
   };
 }
 
@@ -48,9 +46,7 @@ export async function submitGuess(
   sessionId: string,
   guessText: string
 ) {
-  console.log("Submit work?");
   const ds = AppDataSource();
-  if (!ds.isInitialized) await ds.initialize();
 
   const sessionRepo = ds.getRepository(GameSession);
   const guessRepo = ds.getRepository(Guess);
@@ -64,13 +60,8 @@ export async function submitGuess(
   if (session.user.id !== user.id) throw new Error("FORBIDDEN");
   if (session.ended_at) throw new Error("GAME_ALREADY_ENDED");
 
-  const fort = session.fort;
-
-  const MAX_ATTEMPTS = 3;
-  const scoreMap = [100, 70, 50];
-
   const attemptNumber = session.attempts_used + 1;
-  const isCorrect = normalize(guessText) === normalize(fort.name);
+  const isCorrect = normalize(guessText) === normalize(session.fort.name);
 
   await guessRepo.save(
     guessRepo.create({
@@ -86,35 +77,33 @@ export async function submitGuess(
   if (isCorrect) {
     session.is_success = true;
     session.ended_at = new Date();
-    session.score = scoreMap[attemptNumber - 1] || 0;
+    session.score = SCORE_MAP[attemptNumber - 1] ?? 0;
+
+    await sessionRepo.save(session);
+
+    return { correct: true, game_over: true, score: session.score };
+  }
+
+  if (attemptNumber >= MAX_ATTEMPTS) {
+    session.ended_at = new Date();
+    session.score = 0;
+
     await sessionRepo.save(session);
 
     return {
-      correct: true,
-      score: session.score,
+      correct: false,
       game_over: true,
+      attempts_left: 0,
+      hints: session.fort.hints,
     };
-  } else {
-    if (session.attempts_used >= MAX_ATTEMPTS) {
-      session.ended_at = new Date();
-      session.score = 0;
-      await sessionRepo.save(session);
-
-      return {
-        correct: false,
-        game_over: true,
-        attempts_left: 0,
-        hints: fort.hints.slice(0, session.attempts_used),
-      };
-    } else {
-      await sessionRepo.save(session);
-
-      return {
-        correct: false,
-        game_over: false,
-        attempts_left: MAX_ATTEMPTS - session.attempts_used,
-        hints: fort.hints.slice(0, session.attempts_used + 1),
-      };
-    }
   }
+
+  await sessionRepo.save(session);
+
+  return {
+    correct: false,
+    game_over: false,
+    attempts_left: MAX_ATTEMPTS - attemptNumber,
+    hints: session.fort.hints.slice(0, attemptNumber + 1),
+  };
 }

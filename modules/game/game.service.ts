@@ -77,16 +77,15 @@ export async function submitGuess(
 
     console.log("Attempt:", attemptNumber, "Correct:", isCorrect);
 
-    // Save the guess
+    // Save the guess - Create a plain object to avoid cyclic dependency
     try {
-      await guessRepo.save(
-        guessRepo.create({
-          session,
-          guess_text: guessText,
-          attempt_number: attemptNumber,
-          is_correct: isCorrect,
-        })
-      );
+      // Option 1: Use insert instead of save (bypasses relations entirely)
+      await guessRepo.insert({
+        session: { id: sessionId } as any,
+        guess_text: guessText,
+        attempt_number: attemptNumber,
+        is_correct: isCorrect,
+      });
       console.log("Guess saved successfully");
     } catch (err: any) {
       console.error("Failed to save guess:", err);

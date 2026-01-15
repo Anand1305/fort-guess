@@ -4,6 +4,7 @@ import {
   Column,
   ManyToOne,
   CreateDateColumn,
+  JoinColumn,
 } from "typeorm";
 import { GameSession } from "../entities/gamesession";
 
@@ -12,7 +13,10 @@ export class Guess {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @ManyToOne(() => GameSession, (session) => session.guesses)
+  @ManyToOne(() => GameSession, (session) => session.guesses, {
+    onDelete: "CASCADE",
+  })
+  @JoinColumn({ name: "sessionId" }) // Check your actual DB column name - might be sessionIdId
   session!: GameSession;
 
   @Column()

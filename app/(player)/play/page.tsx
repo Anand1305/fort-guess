@@ -26,74 +26,86 @@ export default function PlayPage() {
   /* ---------------- START GAME ---------------- */
 
   const startGame = async () => {
-    setGuess("");
     setLoading(true);
     setMessage(null);
     setGameOver(false);
     setWon(false);
+    setGuess("");
     setGame(null);
 
-    const res = await fetch("/api/game/start", { method: "POST" });
-    const data = await res.json();
-    setLoading(false);
+    try {
+      const res = await fetch("/api/game/start", { method: "POST" });
+      const data = await res.json();
 
-    if (!res.ok || !data.success) {
-      setMessage(data.message || "Something went wrong");
-      return;
+      if (!res.ok || !data.success) {
+        setMessage(data.message || "Failed to start game");
+        return;
+      }
+
+      setGame(data.data);
+    } catch {
+      setMessage("Something went wrong");
+    } finally {
+      setLoading(false);
     }
-
-    setGame(data.data);
   };
 
   /* ---------------- SUBMIT GUESS ---------------- */
 
   const submitGuess = async () => {
-    if (!game || !guess) return;
+    if (!game?.sessionId || !guess.trim() || gameOver || loading) return;
 
     setLoading(true);
     setMessage(null);
 
-    const res = await fetch("/api/game/guess", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId: game.sessionId,
-        guess,
-      }),
-    });
-
-    const data = await res.json();
-    setLoading(false);
-
-    if (!res.ok || !data.success) {
-      setMessage("❌ Invalid guess");
-      return;
-    }
-
-    const result = data.data;
-
-    if (result.correct) {
-      setWon(true);
-      setGameOver(true);
-      setMessage(`You guessed it right! 🎉`);
-      return;
-    }
-
-    if (result.hints && result.attempts_left !== undefined) {
-      setGame({
-        ...game,
-        hints: result.hints,
-        attempts_left: result.attempts_left,
+    try {
+      const res = await fetch("/api/game/guess", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: game.sessionId,
+          guess: guess.trim(),
+        }),
       });
-    }
 
-    if (result.game_over) {
-      setGameOver(true);
-      setMessage("Better luck next time!");
-      return;
-    }
+      const data = await res.json();
 
-    setGuess("");
+      if (!res.ok || !data.success) {
+        setMessage("❌ Invalid guess");
+        return;
+      }
+
+      const result = data.data;
+
+      if (result.correct) {
+        setWon(true);
+        setGameOver(true);
+        setMessage("🎉 You guessed it right!");
+        return;
+      }
+
+      if (result.game_over) {
+        setGameOver(true);
+        setMessage("❌ Game Over. Better luck next time!");
+        return;
+      }
+
+      setGame((prev) =>
+        prev
+          ? {
+              ...prev,
+              hints: result.hints ?? prev.hints,
+              attempts_left: result.attempts_left ?? prev.attempts_left,
+            }
+          : prev
+      );
+
+      setGuess("");
+    } catch {
+      setMessage("Something went wrong");
+    } finally {
+      setLoading(false);
+    }
   };
 
   /* ---------------- UI ---------------- */
@@ -167,7 +179,12 @@ export default function PlayPage() {
                     value={guess}
                     onChange={(e) => setGuess(e.target.value)}
                   />
-                  <Button onClick={submitGuess} disabled={loading}>
+                  <Button
+                    onClick={submitGuess}
+                    disabled={
+                      loading || gameOver || !guess.trim() || !game?.sessionId
+                    }
+                  >
                     Guess
                   </Button>
                 </div>

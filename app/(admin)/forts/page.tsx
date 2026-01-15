@@ -140,7 +140,7 @@ export default function AdminFortsPage() {
     };
 
     const res = await fetch("/api/forts", {
-      method: editing ? "PUT" : "POST",
+      method: editing ? "PATCH" : "POST", // ✅ Use PATCH for editing
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
@@ -167,27 +167,51 @@ export default function AdminFortsPage() {
     setMessage(null);
   };
 
-  /* ---------------- ACTIVATE / DISABLE ---------------- */
+  /* ---------------- DISABLE FORT (FIXED) ---------------- */
 
   const disableFort = async (id: string) => {
     if (!confirm("Disable this fort?")) return;
 
-    await fetch("/api/forts", {
-      method: "DELETE",
+    setLoading(true);
+
+    const res = await fetch("/api/forts", {
+      method: "PUT", // ✅ Changed from DELETE to PUT
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
+      body: JSON.stringify({ id, is_active: false }), // ✅ Set is_active to false
     });
 
+    const data = await res.json();
+    setLoading(false);
+
+    if (!res.ok || !data.success) {
+      setMessage("Failed to disable fort");
+      return;
+    }
+
+    setMessage("Fort disabled");
     loadForts();
   };
 
+  /* ---------------- ACTIVATE FORT (FIXED) ---------------- */
+
   const activateFort = async (id: string) => {
-    await fetch("/api/forts", {
+    setLoading(true);
+
+    const res = await fetch("/api/forts", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, is_active: true }),
     });
 
+    const data = await res.json();
+    setLoading(false);
+
+    if (!res.ok || !data.success) {
+      setMessage("Failed to activate fort");
+      return;
+    }
+
+    setMessage("Fort activated");
     loadForts();
   };
 
@@ -274,7 +298,11 @@ export default function AdminFortsPage() {
               form.description.length < 10
             }
           >
-            {editing ? "Update Fort" : "Create Fort"}
+            {loading
+              ? "Processing..."
+              : editing
+              ? "Update Fort"
+              : "Create Fort"}
           </Button>
 
           {editing && (
@@ -289,7 +317,9 @@ export default function AdminFortsPage() {
             </Button>
           )}
 
-          {message && <p className="text-sm text-center">{message}</p>}
+          {message && (
+            <p className="text-sm text-center font-medium">{message}</p>
+          )}
         </CardContent>
       </Card>
 
@@ -325,6 +355,7 @@ export default function AdminFortsPage() {
                       size="sm"
                       variant="outline"
                       onClick={() => startEdit(f)}
+                      disabled={loading}
                     >
                       Edit
                     </Button>
@@ -334,11 +365,16 @@ export default function AdminFortsPage() {
                         size="sm"
                         variant="destructive"
                         onClick={() => disableFort(f.id)}
+                        disabled={loading}
                       >
                         Disable
                       </Button>
                     ) : (
-                      <Button size="sm" onClick={() => activateFort(f.id)}>
+                      <Button
+                        size="sm"
+                        onClick={() => activateFort(f.id)}
+                        disabled={loading}
+                      >
                         Activate
                       </Button>
                     )}

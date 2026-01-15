@@ -8,21 +8,53 @@ import { User } from "@/databse/entities/users";
 
 export async function POST() {
   try {
+    console.log("=== START GAME REQUEST ===");
+
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) return error("Unauthorized", 401);
+    if (!session?.user?.email) {
+      console.log("Unauthorized - no session");
+      return error("Unauthorized", 401);
+    }
+
+    console.log("User email:", session.user.email);
 
     const ds = AppDataSource();
-    if (!ds.isInitialized) await ds.initialize();
+    console.log("DataSource initialized:", ds.isInitialized);
+
+    if (!ds.isInitialized) {
+      console.log("Initializing DataSource...");
+      await ds.initialize();
+      console.log("DataSource initialized successfully");
+    }
 
     const user = await ds.getRepository(User).findOne({
       where: { email: session.user.email },
     });
 
-    if (!user) return error("User not found", 404);
+    if (!user) {
+      console.log("User not found in database");
+      return error("User not found", 404);
+    }
+
+    console.log("User found:", user.id);
+    console.log("Starting game...");
 
     const data = await startGameController(user);
+
+    console.log("Game started successfully");
+    console.log("Session ID:", data.sessionId);
+
     return success(data);
   } catch (e: any) {
-    return error(e.message, 400);
+    console.error("=== START GAME ERROR ===");
+    console.error("Error message:", e.message);
+    console.error("Error stack:", e.stack);
+
+    return error(
+      process.env.NODE_ENV === "production"
+        ? e.message
+        : `${e.message} | Stack: ${e.stack}`,
+      400
+    );
   }
 }

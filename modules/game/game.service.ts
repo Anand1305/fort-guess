@@ -31,12 +31,15 @@ export async function startGame(user: User) {
 
   await sessionRepo.save(session);
 
+  // Ensure hints is an array
+  const hints = Array.isArray(fort.hints) ? fort.hints : [];
+
   return {
     sessionId: session.id,
     image_url: fort.image_url,
     location: fort.location,
     description: fort.description,
-    hints: fort.hints.slice(0, 1),
+    hints: hints.slice(0, 1),
     attempts_left: MAX_ATTEMPTS,
   };
 }
@@ -46,64 +49,94 @@ export async function submitGuess(
   sessionId: string,
   guessText: string
 ) {
-  const ds = AppDataSource();
+  try {
+    const ds = AppDataSource();
 
-  const sessionRepo = ds.getRepository(GameSession);
-  const guessRepo = ds.getRepository(Guess);
+    const sessionRepo = ds.getRepository(GameSession);
+    const guessRepo = ds.getRepository(Guess);
 
-  const session = await sessionRepo.findOne({
-    where: { id: sessionId },
-    relations: ["fort", "user"],
-  });
+    console.log("Looking for session:", sessionId);
 
-  if (!session) throw new Error("SESSION_NOT_FOUND");
-  if (session.user.id !== user.id) throw new Error("FORBIDDEN");
-  if (session.ended_at) throw new Error("GAME_ALREADY_ENDED");
+    const session = await sessionRepo.findOne({
+      where: { id: sessionId },
+      relations: ["fort", "user"],
+    });
 
-  const attemptNumber = session.attempts_used + 1;
-  const isCorrect = normalize(guessText) === normalize(session.fort.name);
+    console.log("Session found:", !!session);
+    console.log("Fort loaded:", !!session?.fort);
+    console.log("User loaded:", !!session?.user);
 
-  await guessRepo.save(
-    guessRepo.create({
-      session,
-      guess_text: guessText,
-      attempt_number: attemptNumber,
-      is_correct: isCorrect,
-    })
-  );
+    if (!session) throw new Error("SESSION_NOT_FOUND");
+    if (!session.fort) throw new Error("FORT_NOT_LOADED");
+    if (!session.user) throw new Error("USER_NOT_LOADED");
+    if (session.user.id !== user.id) throw new Error("FORBIDDEN");
+    if (session.ended_at) throw new Error("GAME_ALREADY_ENDED");
 
-  session.attempts_used = attemptNumber;
+    const attemptNumber = session.attempts_used + 1;
+    const isCorrect = normalize(guessText) === normalize(session.fort.name);
 
-  if (isCorrect) {
-    session.is_success = true;
-    session.ended_at = new Date();
-    session.score = SCORE_MAP[attemptNumber - 1] ?? 0;
+    console.log("Attempt:", attemptNumber, "Correct:", isCorrect);
+
+    // Save the guess
+    try {
+      await guessRepo.save(
+        guessRepo.create({
+          session,
+          guess_text: guessText,
+          attempt_number: attemptNumber,
+          is_correct: isCorrect,
+        })
+      );
+      console.log("Guess saved successfully");
+    } catch (err: any) {
+      console.error("Failed to save guess:", err);
+      throw new Error(`GUESS_SAVE_FAILED: ${err.message}`);
+    }
+
+    session.attempts_used = attemptNumber;
+
+    // Ensure hints is an array
+    const hints = Array.isArray(session.fort.hints) ? session.fort.hints : [];
+    console.log("Hints array:", hints);
+
+    if (isCorrect) {
+      session.is_success = true;
+      session.ended_at = new Date();
+      session.score = SCORE_MAP[attemptNumber - 1] ?? 0;
+
+      await sessionRepo.save(session);
+      console.log("Game won, session updated");
+
+      return { correct: true, game_over: true, score: session.score };
+    }
+
+    if (attemptNumber >= MAX_ATTEMPTS) {
+      session.ended_at = new Date();
+      session.score = 0;
+
+      await sessionRepo.save(session);
+      console.log("Game over, session updated");
+
+      return {
+        correct: false,
+        game_over: true,
+        attempts_left: 0,
+        hints: hints,
+      };
+    }
 
     await sessionRepo.save(session);
-
-    return { correct: true, game_over: true, score: session.score };
-  }
-
-  if (attemptNumber >= MAX_ATTEMPTS) {
-    session.ended_at = new Date();
-    session.score = 0;
-
-    await sessionRepo.save(session);
+    console.log("Session updated, game continues");
 
     return {
       correct: false,
-      game_over: true,
-      attempts_left: 0,
-      hints: session.fort.hints,
+      game_over: false,
+      attempts_left: MAX_ATTEMPTS - attemptNumber,
+      hints: hints.slice(0, attemptNumber + 1),
     };
+  } catch (error: any) {
+    console.error("Submit guess error:", error);
+    console.error("Error stack:", error.stack);
+    throw error;
   }
-
-  await sessionRepo.save(session);
-
-  return {
-    correct: false,
-    game_over: false,
-    attempts_left: MAX_ATTEMPTS - attemptNumber,
-    hints: session.fort.hints.slice(0, attemptNumber + 1),
-  };
 }
